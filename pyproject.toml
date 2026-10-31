@@ -11,9 +11,9 @@ requires-python = ">=3.10"
 dependencies = ["numpy>=1.24", "scipy>=1.10", "pandas>=2.0"]
 
 [project.optional-dependencies]
+pricer = ["sppricer @ git+https://github.com/hossainyousuf751/sp-pricer"]
 plot = ["matplotlib>=3.7"]
 data = ["yfinance>=0.2"]
-pricer = ["sppricer @ git+https://github.com/hossainyousuf751/sp-pricer"]
 dev = ["pytest>=7", "matplotlib>=3.7"]
 
 [tool.setuptools.packages.find]
