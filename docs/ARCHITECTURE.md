@@ -24,6 +24,9 @@ surface.ForwardCurve + SVISliceSurface + SSVISurface
    ▼
 pipeline.SurfaceFit                 everything above in one object
 pipeline.fit_errors                 RMSE and in-spread % per expiry
+   │  montecarlo.simulate_local_vol correlated local-vol paths (n_paths, n_times, n_assets)
+   ▼
+sppricer products                   discounted_payoff(paths, market), separate repo
 ```
 
 `pipeline.fit_surface(quotes, spot)` is the single entry point. Everything else is a
@@ -44,8 +47,12 @@ list, never from those below:
 | `surface` | `ForwardCurve`, `VolSurface` ABC and implementations, local vol | `svi`, `ssvi` |
 | `arbitrage` | `svi_g`, `check_surface`, `ArbitrageReport` | `surface`, `svi` |
 | `pipeline` | `fit_surface`, `SurfaceFit`, `fit_errors` | all of the above |
+| `montecarlo` | `simulate_local_vol`: correlated Dupire paths, flat-vol benchmark | `surface` |
 | `plotting` | Diagnostic figures (lazy `matplotlib`) | `pipeline` |
-| `data` | Yahoo Finance loader (lazy `yfinance`) | (none) |
+| `data` | CBOE delayed-quote loader (stdlib only), Yahoo loader (lazy `yfinance`) | (none) |
+
+`sppricer` is never imported by the package, only by `examples/autocallable_skew.py`
+(`pip install -e ".[pricer]"`). The contract between the two is the paths array.
 
 Keep model modules (`svi`, `ssvi`) free of pandas and of each other. They work on arrays only.
 
@@ -102,6 +109,7 @@ A change that breaks one of these is a bug, even if the tests still pass.
 | Roadmap item | Where it lands |
 |---|---|
 | M2 smooth θ(T) | **Done:** PCHIP in `SSVISurface.theta` |
-| M3 real-data study | A new `examples/` script over `data/*.csv`. No library change needed |
+| M3 real-data study | **Done:** `data.load_cboe_chain`, `examples/snapshot.py` (daily), `examples/real_data_study.py` |
 | M4 eSSVI ρ(θ) | **Done:** `ESSVIParams`/`fit_essvi` in `ssvi.py`; reuses `SSVISurface` |
-| M5 local-vol MC | Consumes `VolSurface.local_vol`. Lives in the pricer repo, not here |
+| M5 local-vol MC | **Done:** `montecarlo.simulate_local_vol` here; sppricer prices the paths unchanged |
+| M6 put-wing fit | A new params class plus fitter (per-slice φ eSSVI, or repaired SVI). Must keep invariants 3–6; the fit only needs `total_variance(k, theta)` for `SSVISurface` |

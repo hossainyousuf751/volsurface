@@ -134,7 +134,9 @@ most risk. Before merging:
 
 ## 7. Working with live data
 
-- Use `examples/live_fit.py <ticker>` during US market hours. Outside them bids are often zero.
+- For real data at any hour, `examples/snapshot.py` saves CBOE's closing ^SPX / ^NDX chains to
+  `data/`. Run it once per trading day; `examples/real_data_study.py` fits them all.
+- Use `examples/live_fit.py <ticker>` (Yahoo) during US market hours. Outside them bids are often zero.
 - Prefer European index options (`^SPX`). For American options (ETFs, single stocks), expect
   a small early-exercise bias.
 - Every live run writes its raw chain to `data/<TICKER>_<YYYYMMDD>.csv`. Keep the snapshots
