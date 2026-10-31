@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from volsurface.black import black_price
-from volsurface.ssvi import SSVIParams
+from volsurface.ssvi import ESSVIParams, SSVIParams
 
 DEFAULT_EXPIRIES = (0.08, 0.17, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
@@ -22,7 +22,8 @@ def default_atm_vol(T):
 
 
 def synthetic_chain(spot: float = 100.0, rate: float = 0.04, div_yield: float = 0.015,
-                    expiries=DEFAULT_EXPIRIES, params: SSVIParams = SSVIParams(-0.7, 1.0, 0.4),
+                    expiries=DEFAULT_EXPIRIES,
+                    params: SSVIParams | ESSVIParams = SSVIParams(-0.7, 1.0, 0.4),
                     atm_vol=default_atm_vol, strike_range=(0.6, 1.4), strike_step: float = 2.5,
                     rel_spread: float = 0.04, tick: float = 0.01, noise: float = 0.0,
                     seed: int | None = 0) -> tuple[pd.DataFrame, dict]:

@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from volsurface import (
-    FlatVolSurface, ForwardCurve, SSVIParams, SSVISurface, SVIParams, SVISliceSurface, check_surface,
-    fit_errors, fit_surface, synthetic_chain,
+    ESSVIParams, FlatVolSurface, ForwardCurve, SSVIParams, SSVISurface, SVIParams, SVISliceSurface,
+    check_surface, fit_errors, fit_surface, synthetic_chain,
 )
 from volsurface.synthetic import default_atm_vol
 
@@ -55,6 +55,21 @@ def test_end_to_end_on_noisy_synthetic_chain():
     lv = fit.ssvi_surface.local_vol(np.linspace(80, 120, 9), 1.0)
     assert np.all(np.isfinite(lv)) and np.all(lv > 0)
     assert fit.skipped == {}
+    assert fit.essvi_arbitrage.is_free
+    assert (errors["essvi_rmse_volpts"] < 0.5).all()
+    for rho in (fit.essvi_params.rho0, fit.essvi_params.rho1):  # no spurious skew term structure
+        assert rho == pytest.approx(truth["params"].rho, abs=0.05)
+
+
+def test_essvi_fits_varying_skew_chain_better_than_ssvi():
+    true = ESSVIParams(rho0=-0.85, rho1=-0.45, eta=1.0, gamma=0.4, theta_ref=0.05)
+    quotes, truth = synthetic_chain(params=true, noise=0.003, seed=7)
+    fit = fit_surface(quotes, truth["spot"])
+    assert fit.essvi_arbitrage.is_free and fit.essvi_params.is_butterfly_free
+    assert fit.essvi_params.rho0 == pytest.approx(true.rho0, abs=0.05)
+    assert fit.essvi_params.rho1 == pytest.approx(true.rho1, abs=0.05)
+    errors = fit_errors(fit)
+    assert errors["essvi_rmse_volpts"].mean() < 0.5 * errors["ssvi_rmse_volpts"].mean()
 
 
 def test_fit_records_skipped_expiries():

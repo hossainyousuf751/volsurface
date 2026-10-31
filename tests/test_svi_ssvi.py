@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from volsurface import SSVIParams, SVIParams, fit_ssvi, fit_svi, svi_g
+from volsurface import ESSVIParams, SSVIParams, SVIParams, fit_essvi, fit_ssvi, fit_svi, svi_g
 
 K_GRID = np.linspace(-1.0, 0.6, 41)
 
@@ -43,6 +43,26 @@ def test_zero_weights_fall_back_to_equal_weights():
     theta = np.full_like(K_GRID, 0.02)
     w_ssvi = SSVIParams(-0.65, 1.1, 0.35).total_variance(K_GRID, theta)
     assert fit_ssvi(K_GRID, theta, w_ssvi, weights=np.zeros_like(w_ssvi)) == fit_ssvi(K_GRID, theta, w_ssvi)
+
+
+def test_essvi_fit_recovers_varying_skew_and_beats_ssvi():
+    true = ESSVIParams(rho0=-0.85, rho1=-0.45, eta=1.0, gamma=0.4, theta_ref=0.05)
+    thetas = np.array([0.003, 0.006, 0.01, 0.02, 0.03, 0.05])
+    k = np.tile(K_GRID, len(thetas))
+    theta = np.repeat(thetas, len(K_GRID))
+    w = true.total_variance(k, theta)
+    fitted = fit_essvi(k, theta, w)
+    for name in ("rho0", "rho1", "eta", "gamma"):
+        assert getattr(fitted, name) == pytest.approx(getattr(true, name), abs=1e-3)
+    assert fitted.is_butterfly_free
+    ssvi_err = np.abs(fit_ssvi(k, theta, w).total_variance(k, theta) - w).max()
+    assert np.abs(fitted.total_variance(k, theta) - w).max() < 1e-3 * ssvi_err
+
+
+def test_essvi_with_constant_rho_is_ssvi():
+    k, theta = np.tile(K_GRID, 3), np.repeat([0.01, 0.02, 0.04], len(K_GRID))
+    np.testing.assert_allclose(ESSVIParams(-0.6, -0.6, 1.1, 0.35, 0.04).total_variance(k, theta),
+                               SSVIParams(-0.6, 1.1, 0.35).total_variance(k, theta), rtol=1e-14)
 
 
 def test_ssvi_constraint_flags_violation():
