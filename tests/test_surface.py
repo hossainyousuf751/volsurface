@@ -2,9 +2,10 @@ import numpy as np
 import pytest
 
 from volsurface import (
-    FlatVolSurface, ForwardCurve, SVIParams, SVISliceSurface, check_surface, fit_errors,
-    fit_surface, synthetic_chain,
+    FlatVolSurface, ForwardCurve, SSVIParams, SSVISurface, SVIParams, SVISliceSurface, check_surface,
+    fit_errors, fit_surface, synthetic_chain,
 )
+from volsurface.synthetic import default_atm_vol
 
 CURVE = ForwardCurve(100.0, [0.5, 1.0, 2.0], [101.0, 102.0, 104.0], [0.98, 0.96, 0.92])
 
@@ -20,6 +21,17 @@ def test_flat_surface_local_vol_equals_implied_vol():
     K, T = np.meshgrid(np.linspace(70, 140, 15), np.linspace(0.2, 1.8, 9))
     np.testing.assert_allclose(surf.implied_vol(K, T), 0.2, atol=1e-12)
     np.testing.assert_allclose(surf.local_vol(K, T), 0.2, atol=1e-5)
+
+
+def test_ssvi_theta_monotone_and_local_vol_continuous_across_expiries():
+    expiries = np.array([0.25, 0.5, 1.0, 2.0])
+    thetas = default_atm_vol(expiries) ** 2 * expiries
+    surf = SSVISurface(CURVE, SSVIParams(-0.7, 1.0, 0.4), expiries, thetas)
+    np.testing.assert_allclose(surf.theta(expiries), thetas, rtol=1e-12)
+    assert np.all(np.diff(surf.theta(np.linspace(0.0, 3.0, 601))) >= 0)
+    K = np.array([90.0, 100.0, 110.0])
+    for T in expiries[1:-1]:  # piecewise-linear theta jumps here (the local-vol bands)
+        np.testing.assert_allclose(surf.local_vol(K, T - 1e-3), surf.local_vol(K, T + 1e-3), rtol=5e-3)
 
 
 def test_crossed_slices_flag_calendar_arbitrage():

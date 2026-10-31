@@ -80,8 +80,11 @@ A change that breaks one of these is a bug, even if the tests still pass.
 1. **Forwards come from the market.** No stage assumes a rate or dividend yield. F and DF
    per expiry come from put-call parity only.
 2. **OTM quotes only** enter the IV table: calls with K ≥ F, puts with K < F.
-3. **θ(T) is non-decreasing.** Enforced twice, in `fit_surface` and in `SSVISurface.__init__`.
-   This is what rules out calendar arbitrage in SSVI.
+3. **θ(T) is non-decreasing and C¹.** The node values are made monotone in `fit_surface` and
+   again in `SSVISurface.__init__`. Between nodes, the monotone PCHIP interpolation keeps θ(T)
+   non-decreasing, which rules out calendar arbitrage in SSVI, and continuously
+   differentiable, which removes local-vol jumps at the expiries. Any replacement
+   interpolator must keep both properties.
 4. **SSVI candidates are always admissible.** η = s·2/(1+|ρ|), s ∈ (0,1], γ ∈ (0, ½].
    Don't replace this reparameterisation with a penalty.
 5. **SVI slices are only penalised, not guaranteed.** Their arbitrage status must be
@@ -95,7 +98,7 @@ A change that breaks one of these is a bug, even if the tests still pass.
 
 | Roadmap item | Where it lands |
 |---|---|
-| M2 smooth θ(T) | `SSVISurface.theta` (and the `thetas` built in `fit_surface`). Must stay monotone (invariant 3) |
+| M2 smooth θ(T) | **Done:** PCHIP in `SSVISurface.theta` |
 | M3 real-data study | A new `examples/` script over `data/*.csv`. No library change needed |
 | M4 eSSVI ρ(θ) | New params class in `ssvi.py` (or `essvi.py`) plus a new `VolSurface` subclass |
 | M5 local-vol MC | Consumes `VolSurface.local_vol`. Lives in the pricer repo, not here |
