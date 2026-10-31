@@ -23,7 +23,7 @@ Every change follows the same order:
 1. **State the change in one sentence.** If you can't, split it.
 2. **Write or update a test first** that fails without the change (see §4 for what kind).
 3. **Make the smallest change that passes it.**
-4. **Run the full suite:** `pytest -q`.
+4. **Lint and run the full suite:** `ruff check . && pytest -q`.
 5. **Run the synthetic demo:** `python examples/synthetic_demo.py`. Check that the fitted
    SSVI parameters still match the truth (ρ ≈ −0.70, η ≈ 1.00, γ ≈ 0.40), that both
    arbitrage reports say `True`, and that the plots in `docs/` still look right.
@@ -38,7 +38,8 @@ same commit and give the reason in the commit message.
 
 These are the existing patterns. Match them; don't introduce new ones.
 
-**Module layout**
+### Module layout
+
 - One module per pipeline stage (`black`, `chain`, `svi`, `ssvi`, `surface`, `arbitrage`,
   `pipeline`). New stages get a new module; don't add a second job to an existing one.
 - Every module starts with a docstring that says what it does and, for model modules, gives
@@ -48,7 +49,8 @@ These are the existing patterns. Match them; don't introduce new ones.
   uses them, so the core package installs with numpy/scipy/pandas only.
 - Start each module with `from __future__ import annotations`.
 
-**Numerics**
+### Numerics
+
 - Functions take array-likes and coerce once at the top: `k = np.asarray(k, dtype=float)`.
   Broadcast with `np.broadcast_arrays` when two inputs must share a shape.
 - Write vectorised numpy. Python loops are fine across expiries or optimiser starts, not
@@ -64,15 +66,17 @@ These are the existing patterns. Match them; don't introduce new ones.
 - Fitters use `scipy.optimize.least_squares` with bounds, a small multi-start grid, and keep
   the lowest cost. Weights are normalised by their mean and passed as `sqrt(weights)`.
 
-**Naming**: follow the maths
+### Naming: follow the maths
+
 - `k` log-moneyness ln(K/F), `w` total implied variance σ²T, `theta` ATM total variance,
   `T` maturity in years, `F` forward, `DF`/`df` discount factor, `K` strike.
 - Upper-case single letters are fine for financial quantities (`F`, `K`, `T`); everything
   else is `snake_case`.
 - DataFrame columns are `snake_case` and match the names in `chain.py`'s docstring.
 
-**Style**
-- Line length about 110 (what the code already uses).
+### Style
+
+- Line length 110, enforced by `ruff check .` (rules E, W, F; configured in `pyproject.toml`).
 - Comments explain *why* (a modelling choice, a paper reference), never *what*.
 - Cite the source paper or remark in the docstring when you implement a formula from one.
 
@@ -84,7 +88,7 @@ Tests live in `tests/`, one file per area. Use plain `pytest` functions and
 The project's core testing idea: **generate data from a known truth, then recover it.**
 
 | Kind of change | Required test |
-|---|---|
+| --- | --- |
 | New pricing / inversion code | Round trip: price → invert → original input, to ~1e-8 |
 | New fitter or model | Parameter recovery on noiseless data from `synthetic_chain` or the model itself |
 | New arbitrage check | A known-bad case is flagged *and* a known-good case passes (cf. Vogt example) |
@@ -93,6 +97,7 @@ The project's core testing idea: **generate data from a known truth, then recove
 | Bug fix | A test that reproduces the bug, written before the fix |
 
 Rules:
+
 - Tests must be deterministic: always pass `seed=` to `synthetic_chain`.
 - Tests must run offline. Nothing in `tests/` may call Yahoo Finance. To test against real
   data, commit a small CSV snapshot and load it.
@@ -122,8 +127,8 @@ most risk. Before merging:
 - Branch from `main`: `feat/<topic>`, `fix/<topic>`, `docs/<topic>`.
 - Commit messages: imperative subject ≤ 72 chars (`Add monotone spline for theta(T)`),
   body explaining *why* and any change in validation numbers.
-- CI (`.github/workflows/ci.yml`) runs `pytest` on 3.10 to 3.12 for every push and PR. A
-  PR merges only when CI is green.
+- CI (`.github/workflows/ci.yml`) runs `ruff check`, `pytest`, and the synthetic demo on
+  3.10 to 3.12 for every push and PR. A PR merges only when CI is green.
 - Never commit `data/` (git-ignored: live snapshots may be large or licence-restricted),
   virtualenvs, or `__pycache__`. Do commit the regenerated `docs/*.png` used by the README.
 
@@ -139,7 +144,7 @@ most risk. Before merging:
 
 ## 8. Definition of done
 
-- [ ] `pytest -q` green locally, and CI green on all three Python versions
+- [ ] `ruff check .` and `pytest -q` green locally, and CI green on all three Python versions
 - [ ] New behaviour has a test of the right kind (§4)
 - [ ] `python examples/synthetic_demo.py` recovers the true parameters; arbitrage reports `True`
 - [ ] Public API changes are re-exported in `__init__.py` and reflected in the README

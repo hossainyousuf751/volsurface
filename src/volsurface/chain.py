@@ -89,7 +89,8 @@ def build_iv_table(quotes: pd.DataFrame, n_parity_strikes: int = 8) -> pd.DataFr
         raise ValueError("no expiry produced a usable implied-vol slice")
     table = pd.concat(frames, ignore_index=True).dropna(subset=["iv_mid"])
     table["w"] = table["iv_mid"] ** 2 * table["T"]
-    table["vega"] = black_vega(table["forward"], table["strike"], table["T"], table["iv_mid"], table["discount"])
+    table["vega"] = black_vega(table["forward"], table["strike"], table["T"], table["iv_mid"],
+                               table["discount"])
     table = table.sort_values(["T", "k"]).reset_index(drop=True)
     table.attrs["skipped"] = skipped
     return table

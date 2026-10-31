@@ -15,7 +15,8 @@ from volsurface.plotting import plot_smiles, plot_vol_heatmap
 ticker = sys.argv[1] if len(sys.argv) > 1 else "^SPX"
 quotes, spot = load_yfinance_chain(ticker, max_expiries=10)
 
-data_dir = Path("data")
+root = Path(__file__).resolve().parent.parent
+data_dir, docs_dir = root / "data", root / "docs"
 data_dir.mkdir(exist_ok=True)
 stamp = f"{ticker.strip('^')}_{date.today():%Y%m%d}"
 quotes.to_csv(data_dir / f"{stamp}.csv", index=False)  # keep snapshots for reproducibility
@@ -29,5 +30,5 @@ print(f"SVI slices: {fit.svi_arbitrage.summary()}")
 print(f"SSVI:       {fit.ssvi_arbitrage.summary()}")
 print(fit_errors(fit).round(3).to_string(index=False))
 
-plot_smiles(fit, f"docs/{stamp}_smiles.png", title=f"{ticker} smiles")
-plot_vol_heatmap(fit, f"docs/{stamp}_local_vol.png", kind="local")
+plot_smiles(fit, docs_dir / f"{stamp}_smiles.png", title=f"{ticker} smiles")
+plot_vol_heatmap(fit, docs_dir / f"{stamp}_local_vol.png", kind="local")

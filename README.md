@@ -108,3 +108,7 @@ is used rather than a separate OIS curve.
 - Gatheral, J. & Jacquier, A. (2014). Arbitrage-free SVI volatility surfaces. *Quantitative Finance* 14(1).
 - Dupire, B. (1994). Pricing with a smile. *Risk* 7(1).
 - Lee, R. (2004). The moment formula for implied volatility at extreme strikes. *Mathematical Finance* 14(3).
+
+## License
+
+[MIT](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.
