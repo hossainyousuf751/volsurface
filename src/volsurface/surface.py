@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 
-from volsurface.ssvi import SSVIParams
+from volsurface.ssvi import ESSVIParams, SSVIParams
 from volsurface.svi import SVIParams
 
 
@@ -117,10 +117,11 @@ class SSVISurface(VolSurface):
     PCHIP keeps theta non-decreasing, so the surface stays free of calendar
     arbitrage, and makes it continuously differentiable, so dw/dT and the
     Dupire local vol have no jumps at the expiries. Beyond the last expiry
-    theta continues along its end tangent.
+    theta continues along its end tangent. Also serves eSSVI: params only needs
+    total_variance(k, theta).
     """
 
-    def __init__(self, curve: ForwardCurve, params: SSVIParams, expiries, thetas):
+    def __init__(self, curve: ForwardCurve, params: SSVIParams | ESSVIParams, expiries, thetas):
         super().__init__(curve)
         self.params = params
         t = np.concatenate([[0.0], np.asarray(expiries, dtype=float)])

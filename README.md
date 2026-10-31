@@ -6,7 +6,7 @@ Build an arbitrage-free implied volatility surface from raw option quotes, then
 extract Dupire local volatility for pricing path-dependent products.
 
 **Pipeline:** raw bid/ask quotes → cleaning → implied forwards and discount factors from
-put-call parity → OTM implied vols → per-expiry SVI smiles → global SSVI surface →
+put-call parity → OTM implied vols → per-expiry SVI smiles → global SSVI and eSSVI surfaces →
 static-arbitrage checks → Dupire local vol.
 
 ![Fitted smiles](docs/smiles.png)
@@ -56,6 +56,12 @@ so it is continuously differentiable and the local vol has no jumps at the expir
 no-arbitrage bound η(1 + |ρ|) ≤ 2, γ ≤ ½.
 The fitted surface is free of static arbitrage by construction.
 
+**eSSVI** (Hendriks & Martini 2019) lets the skew vary with maturity:
+ρ(θ) = ρ₀ + (ρ₁ − ρ₀)·√min(θ/θ_ref, 1). Every slice stays butterfly-free through
+η = s·2/(1 + max(|ρ₀|, |ρ₁|)). Calendar arbitrage is no longer excluded by construction, so a
+decrease of w in θ is penalised during the fit and reported by the diagnostics. The fit starts
+from the SSVI solution, so its total weighted error is never worse than SSVI's.
+
 **Arbitrage diagnostics.** Butterfly arbitrage via Gatheral's density function g(k) ≥ 0 on
 each slice; calendar arbitrage via w(k, T) non-decreasing in T at fixed k.
 
@@ -76,7 +82,17 @@ bid-ask spread, and rounds to the tick, so every stage can be checked against th
 | SSVI ρ / η / γ (true −0.70 / 1.00 / 0.40) | −0.699 / 1.002 / 0.399 |
 | SSVI RMSE | 0.02–0.12 vol points per expiry |
 | Model vols inside bid-ask band | 100% |
-| Static arbitrage | none (SVI slices and SSVI) |
+| Static arbitrage | none (SVI slices, SSVI, eSSVI) |
+
+On a chain whose skew flattens with maturity (true ρ₀ / ρ₁ = −0.85 / −0.45), constant-ρ SSVI
+can no longer fit:
+
+| Check | SSVI | eSSVI |
+|---|---|---|
+| ρ₀ / ρ₁ | −0.484 (single ρ) | −0.837 / −0.447 |
+| Mean RMSE | 0.54 vol points | 0.06 vol points |
+| Model vols inside bid-ask band | 54% | 100% |
+| Static arbitrage | none | none |
 
 Unit tests also cover implied-vol round trips, parity recovery of forwards and discount
 factors, SVI and SSVI parameter recovery, detection of Axel Vogt's known butterfly-arbitrage
@@ -92,7 +108,7 @@ equalling implied vol on a flat surface.
       the horizontal bands in the local vol at each expiry
 - [ ] **M3 Real-data study:** daily ^SPX snapshots; track how ρ, η, and ATM term structure move
       with the market; compare SVI and SSVI fit quality on real spreads
-- [ ] **M4 eSSVI:** maturity-dependent ρ(θ) for better fits across the term structure
+- [x] **M4 eSSVI:** maturity-dependent ρ(θ) for better fits across the term structure
 - [ ] **M5 Link to the pricer:** local-vol Monte Carlo in
       [sppricer](https://github.com/hossainyousuf751/sp-pricer); quantify how much skew lowers
       the fair value of a worst-of autocallable compared with a flat-vol price
@@ -108,5 +124,6 @@ is used rather than a separate OIS curve.
 
 - Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide.* Wiley.
 - Gatheral, J. & Jacquier, A. (2014). Arbitrage-free SVI volatility surfaces. *Quantitative Finance* 14(1).
+- Hendriks, S. & Martini, C. (2019). The extended SSVI volatility surface. *Journal of Computational Finance* 22(5).
 - Dupire, B. (1994). Pricing with a smile. *Risk* 7(1).
 - Lee, R. (2004). The moment formula for implied volatility at extreme strikes. *Mathematical Finance* 14(3).

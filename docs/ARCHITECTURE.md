@@ -16,6 +16,7 @@ IV table (T, strike, k, w, iv_*, forward, discount, vega)
    │  svi.fit_svi                   one smile per expiry, vega-weighted
    │  θ(T) = SVI w(0), forced non-decreasing
    │  ssvi.fit_ssvi                 global (ρ, η, γ) across all quotes
+   │  ssvi.fit_essvi                eSSVI (ρ₀, ρ₁, η, γ), started from the SSVI fit
    ▼
 surface.ForwardCurve + SVISliceSurface + SSVISurface
    │  arbitrage.check_surface       butterfly (g ≥ 0) and calendar (∂T w ≥ 0)
@@ -37,7 +38,7 @@ list, never from those below:
 |---|---|---|
 | `black` | Black-76 price, vega, and implied vol on (F, DF) | (none) |
 | `svi` | `SVIParams`, analytic derivatives, `fit_svi` | (none) |
-| `ssvi` | `SSVIParams`, `fit_ssvi` | (none) |
+| `ssvi` | `SSVIParams`, `fit_ssvi`, `ESSVIParams`, `fit_essvi` | (none) |
 | `chain` | Cleaning, parity forwards, IV table | `black` |
 | `synthetic` | Option chains from a known SSVI truth | `black`, `ssvi` |
 | `surface` | `ForwardCurve`, `VolSurface` ABC and implementations, local vol | `svi`, `ssvi` |
@@ -86,7 +87,9 @@ A change that breaks one of these is a bug, even if the tests still pass.
    differentiable, which removes local-vol jumps at the expiries. Any replacement
    interpolator must keep both properties.
 4. **SSVI candidates are always admissible.** η = s·2/(1+|ρ|), s ∈ (0,1], γ ∈ (0, ½].
-   Don't replace this reparameterisation with a penalty.
+   Don't replace this reparameterisation with a penalty. eSSVI keeps the same guarantee per
+   slice with max(|ρ₀|, |ρ₁|) in place of |ρ|, but its calendar arbitrage is only penalised,
+   so `fit.essvi_arbitrage` must be reported, as for SVI (invariant 5).
 5. **SVI slices are only penalised, not guaranteed.** Their arbitrage status must be
    *reported* (`fit.svi_arbitrage`), never assumed.
 6. **Local vol returns NaN, never a made-up number,** where ∂T w ≤ 0 or the Dupire
@@ -100,5 +103,5 @@ A change that breaks one of these is a bug, even if the tests still pass.
 |---|---|
 | M2 smooth θ(T) | **Done:** PCHIP in `SSVISurface.theta` |
 | M3 real-data study | A new `examples/` script over `data/*.csv`. No library change needed |
-| M4 eSSVI ρ(θ) | New params class in `ssvi.py` (or `essvi.py`) plus a new `VolSurface` subclass |
+| M4 eSSVI ρ(θ) | **Done:** `ESSVIParams`/`fit_essvi` in `ssvi.py`; reuses `SSVISurface` |
 | M5 local-vol MC | Consumes `VolSurface.local_vol`. Lives in the pricer repo, not here |

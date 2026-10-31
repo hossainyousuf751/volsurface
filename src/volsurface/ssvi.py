@@ -63,3 +63,68 @@ def fit_ssvi(k, theta, w, weights=None) -> SSVIParams:
         if best is None or sol.cost < best.cost:
             best = sol
     return SSVIParams(*map(float, to_params(best.x)))
+
+
+@dataclass(frozen=True)
+class ESSVIParams:
+    """Extended SSVI (Hendriks & Martini 2019): the skew rho varies with theta.
+
+    rho(theta) = rho0 + (rho1 - rho0) * sqrt(min(theta / theta_ref, 1))
+
+    Each slice is butterfly-free when eta * (1 + max(|rho0|, |rho1|)) <= 2 and
+    0 < gamma <= 1/2. Calendar arbitrage is no longer excluded by construction
+    once rho varies; the wings need psi * (1 +- rho) non-decreasing in theta,
+    psi = theta * phi(theta). fit_essvi penalises it; check_surface reports it.
+    """
+
+    rho0: float
+    rho1: float
+    eta: float
+    gamma: float
+    theta_ref: float
+
+    def rho(self, theta):
+        u = np.sqrt(np.clip(np.asarray(theta, dtype=float) / self.theta_ref, 0.0, 1.0))
+        return self.rho0 + (self.rho1 - self.rho0) * u
+
+    def total_variance(self, k, theta):
+        return ssvi_total_variance(k, theta, self.rho(theta), self.eta, self.gamma)
+
+    @property
+    def is_butterfly_free(self) -> bool:
+        rho_max = max(abs(self.rho0), abs(self.rho1))
+        return rho_max < 1 and self.eta > 0 and 0 < self.gamma <= 0.5 \
+            and self.eta * (1 + rho_max) <= 2 + 1e-12
+
+
+def fit_essvi(k, theta, w, weights=None, start: SSVIParams | None = None) -> ESSVIParams:
+    """Fit (rho0, rho1, eta, gamma) given each quote's ATM total variance theta.
+
+    eta = s * 2 / (1 + max(|rho0|, |rho1|)), s in (0, 1], keeps every slice
+    butterfly-free. A decrease of w in theta on a (k, theta) grid is penalised.
+    The fit starts from the SSVI solution (rho0 = rho1, zero penalty) and the
+    optimiser only accepts cost-reducing steps, so it never fits worse than SSVI.
+    """
+    k, theta, w = (np.asarray(x, dtype=float) for x in (k, theta, w))
+    weights = np.ones_like(w) if weights is None else np.asarray(weights, dtype=float)
+    if not weights.mean() > 0:  # all-zero or NaN weights (e.g. vanishing vega): fall back to equal
+        weights = np.ones_like(w)
+    sw = np.sqrt(weights / weights.mean())
+    start = start or fit_ssvi(k, theta, w, weights)
+    theta_ref = float(theta.max())
+    k_grid = np.linspace(-3.0, 3.0, 61)[:, None]
+    theta_grid = np.linspace(theta_ref / 40, theta_ref, 40)  # beyond theta_ref rho is constant (SSVI)
+
+    def to_params(x):
+        rho0, rho1, s, gamma = map(float, x)
+        return ESSVIParams(rho0, rho1, s * 2 / (1 + max(abs(rho0), abs(rho1))), gamma, theta_ref)
+
+    def residuals(x):
+        p = to_params(x)
+        dw = np.diff(p.total_variance(k_grid, theta_grid), axis=1)
+        return np.append(sw * (p.total_variance(k, theta) - w), 1e3 * max(0.0, -dw.min()))
+
+    s0 = np.clip(start.eta * (1 + abs(start.rho)) / 2, 1e-3, 1.0)
+    x0 = [start.rho, start.rho, s0, np.clip(start.gamma, 0.01, 0.5)]
+    lb, ub = np.array([-0.999, -0.999, 1e-3, 0.01]), np.array([0.999, 0.999, 1.0, 0.5])
+    return to_params(least_squares(residuals, x0, bounds=(lb, ub), method="trf").x)

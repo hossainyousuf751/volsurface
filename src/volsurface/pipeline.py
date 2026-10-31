@@ -9,7 +9,7 @@ import pandas as pd
 
 from volsurface.arbitrage import ArbitrageReport, check_surface
 from volsurface.chain import build_iv_table, clean_quotes
-from volsurface.ssvi import SSVIParams, fit_ssvi
+from volsurface.ssvi import ESSVIParams, SSVIParams, fit_essvi, fit_ssvi
 from volsurface.surface import ForwardCurve, SSVISurface, SVISliceSurface
 from volsurface.svi import SVIParams, fit_svi
 
@@ -25,6 +25,9 @@ class SurfaceFit:
     ssvi_surface: SSVISurface
     svi_arbitrage: ArbitrageReport
     ssvi_arbitrage: ArbitrageReport
+    essvi_params: ESSVIParams
+    essvi_surface: SSVISurface
+    essvi_arbitrage: ArbitrageReport
     skipped: dict[float, str] = field(default_factory=dict)  # expiry -> why it was dropped
 
     @property
@@ -55,11 +58,13 @@ def fit_surface(quotes: pd.DataFrame, spot: float, min_quotes_per_expiry: int = 
 
     theta_per_quote = table["T"].map(thetas).to_numpy()
     ssvi = fit_ssvi(table["k"], theta_per_quote, table["w"], weights=table["vega"])
+    essvi = fit_essvi(table["k"], theta_per_quote, table["w"], weights=table["vega"], start=ssvi)
 
     per_exp = table.groupby("T")[["forward", "discount"]].first().loc[expiries]
     curve = ForwardCurve(spot, expiries, per_exp["forward"].to_numpy(), per_exp["discount"].to_numpy())
     svi_surface = SVISliceSurface(curve, expiries, [slices[T] for T in expiries])
     ssvi_surface = SSVISurface(curve, ssvi, expiries, [thetas[T] for T in expiries])
+    essvi_surface = SSVISurface(curve, essvi, expiries, [thetas[T] for T in expiries])
     k_grid = np.linspace(table["k"].min(), table["k"].max(), 301)
 
     return SurfaceFit(
@@ -67,6 +72,8 @@ def fit_surface(quotes: pd.DataFrame, spot: float, min_quotes_per_expiry: int = 
         svi_surface=svi_surface, ssvi_surface=ssvi_surface,
         svi_arbitrage=check_surface(svi_surface, expiries, k_grid),
         ssvi_arbitrage=check_surface(ssvi_surface, expiries, k_grid),
+        essvi_params=essvi, essvi_surface=essvi_surface,
+        essvi_arbitrage=check_surface(essvi_surface, expiries, k_grid),
         skipped=dict(sorted(skipped.items())),
     )
 
@@ -77,7 +84,8 @@ def fit_errors(fit: SurfaceFit) -> pd.DataFrame:
     rows = []
     for T, s in t.groupby("T"):
         row = {"T": T, "n_quotes": len(s)}
-        for name, surf in (("svi", fit.svi_surface), ("ssvi", fit.ssvi_surface)):
+        for name, surf in (("svi", fit.svi_surface), ("ssvi", fit.ssvi_surface),
+                           ("essvi", fit.essvi_surface)):
             model = np.sqrt(surf.total_variance(s["k"].to_numpy(), T) / T)
             row[f"{name}_rmse_volpts"] = 100 * np.sqrt(np.mean((model - s["iv_mid"]) ** 2))
             band = s["iv_bid"].notna() & s["iv_ask"].notna()

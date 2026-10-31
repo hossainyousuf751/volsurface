@@ -27,6 +27,8 @@ for T, reason in fit.skipped.items():
 print(f"SSVI: {fit.ssvi_params}")
 print(f"SVI slices: {fit.svi_arbitrage.summary()}")
 print(f"SSVI:       {fit.ssvi_arbitrage.summary()}")
+print(f"eSSVI: {fit.essvi_params}")
+print(f"eSSVI:      {fit.essvi_arbitrage.summary()}")
 print(fit_errors(fit).round(3).to_string(index=False))
 
 plot_smiles(fit, f"docs/{stamp}_smiles.png", title=f"{ticker} smiles")
