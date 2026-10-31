@@ -28,5 +28,6 @@ with pd.option_context("display.float_format", "{:.3f}".format):
 
 plot_smiles(fit, out / "smiles.png", title="SVI and SSVI fits to a noisy synthetic chain")
 plot_vol_heatmap(fit, out / "implied_vol.png", kind="implied")
-plot_vol_heatmap(fit, out / "local_vol.png", kind="local", title="Dupire local volatility from the SSVI surface")
+plot_vol_heatmap(fit, out / "local_vol.png", kind="local",
+                 title="Dupire local volatility from the SSVI surface")
 print(f"\nPlots written to {out}")

@@ -2,6 +2,7 @@ name: tests
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -16,4 +17,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
+      - run: ruff check .
       - run: pytest -q
+      - run: python examples/synthetic_demo.py
+        env:
+          MPLBACKEND: Agg
