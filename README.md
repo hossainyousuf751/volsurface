@@ -17,16 +17,18 @@ static-arbitrage checks → Dupire local vol.
 pip install -e ".[dev]"
 pytest
 python examples/synthetic_demo.py        # offline, against a known true surface
-pip install -e ".[data]"
-python examples/live_fit.py ^SPX         # live Yahoo Finance chain (run in US market hours)
+python examples/snapshot.py              # save today's CBOE ^SPX / ^NDX close to data/ (any time)
+python examples/real_data_study.py       # fit every saved snapshot (M3)
+pip install -e ".[pricer]"
+python examples/autocallable_skew.py     # skew vs flat vol on a worst-of autocallable (M5)
 ```
 
 ```python
 from volsurface import fit_surface, fit_errors
-from volsurface.data import load_yfinance_chain
+from volsurface.data import load_cboe_chain
 
-quotes, spot = load_yfinance_chain("^SPX")
-fit = fit_surface(quotes, spot)
+quotes, spot, as_of = load_cboe_chain("^SPX")   # or load_yfinance_chain (pip install -e ".[data]")
+fit = fit_surface(quotes, spot, max_rel_spread=0.3)
 print(fit.ssvi_params, fit.ssvi_arbitrage.summary())
 print(fit_errors(fit))
 fit.ssvi_surface.implied_vol(K=0.9 * spot, T=1.0)
@@ -101,24 +103,87 @@ equalling implied vol on a flat surface.
 
 ![Local volatility](docs/local_vol.png)
 
+## Real data (M3): SPX and NDX, CBOE close of 2026-10-30
+
+| | SPX | NDX |
+|---|---|---|
+| Quotes → OTM implied vols | 24,550 → 10,132 (47 expiries) | 14,186 → 3,380 (36 expiries) |
+| ATM vol 1m / 1y | 14.9% / 17.1% | 24.2% / 23.1% |
+| SSVI ρ / η / γ | −0.55 / 1.24 / 0.50 | −0.46 / 1.26 / 0.46 |
+| eSSVI ρ₀ → ρ₁ | −0.68 → −0.53 | −0.53 → −0.44 |
+| Median RMSE, SVI / SSVI / eSSVI (vol pts) | 0.20 / 2.25 / 2.27 | 0.14 / 0.84 / 0.73 |
+| Static arbitrage, SVI slices | 797 calendar violations, butterfly | 2,076 calendar violations, butterfly |
+| Static arbitrage, SSVI and eSSVI | none | none |
+
+![SPX smiles](docs/spx_smiles.png)
+
+Findings:
+
+- **Skew flattens with maturity**, as eSSVI was built for: SPX ρ goes from −0.68 at the short
+  end to −0.53 at the long end. eSSVI improves NDX by 0.1 vol points, but barely moves SPX.
+- **SSVI's binding constraint is the SPX put wing.** Within ±1 standard deviation of the money
+  SSVI is within 0.5–0.7 vol points, but beyond −2 standard deviations it is about 7 vol points
+  too low at every maturity. The fit sits on the no-arbitrage boundary (η(1+|ρ|) = 1.92 ≈ 2,
+  γ = ½): SPX's put skew is steeper than a single power-law SSVI can be while staying
+  arbitrage-free. Free SVI slices follow the wing but pay for it with calendar and butterfly
+  arbitrage.
+- Tracking ρ, η and the ATM term structure over time needs daily snapshots:
+  run `examples/snapshot.py` each trading day; `examples/real_data_study.py` then writes
+  `data/study.csv` and `docs/study_params.png`.
+
+## Skew and a worst-of autocallable (M5)
+
+`volsurface.montecarlo.simulate_local_vol` simulates correlated paths under Dupire local vol
+(daily log-Euler, forwards matched by construction) in the layout
+[sppricer](https://github.com/hossainyousuf751/sp-pricer) products take. It reprices the
+surface's own vanillas within 4 standard errors, and with `flat_vols` it is GBM on the same
+forward curves and random numbers, which agrees with sppricer's GBM engine (100.49 vs 100.51,
+± 0.04).
+
+`examples/autocallable_skew.py` prices sppricer's README note (3y quarterly worst-of Phoenix,
+8% p.a. memory coupon, autocall at 100% from year 1, European protection) on SPX and NDX with
+the eSSVI surfaces above, ρ(SPX, NDX) = 0.9, against flat ATM vol at maturity (18.2% / 23.6%):
+
+| Protection / coupon barrier | Flat ATM vol | Local vol | Skew effect | P(worst < barrier at maturity) flat → LV |
+|---|---|---|---|---|
+| 60% / 70% | 100.51 | 95.88 | **−4.62 ± 0.06** | 8.6% → 15.3% |
+| 70% / 80% | 97.66 | 94.64 | **−3.02 ± 0.05** | 16.7% → 19.8% |
+| 50% / 60% | 102.87 | 97.23 | **−5.63 ± 0.07** | 3.4% → 11.4% |
+
+Prices per 100 notional, 200,000 paths, 95% intervals on the paired difference. Flat vol
+misses most of the down-and-in put the investor sells: **skew takes 3–6 points off the fair
+value, and the deeper the barrier, the larger the error**, because flat ATM vol is furthest
+from the market exactly there. Since the eSSVI surface already under-states the SPX put wing,
+these are lower bounds on the skew effect.
+
 ## Roadmap
 
 - [x] **M1 Pipeline:** cleaning, parity forwards, implied vols, SVI, SSVI, arbitrage checks, Dupire local vol
 - [x] **M2 Smooth term structure:** replace piecewise-linear θ(T) with a monotone spline, removing
       the horizontal bands in the local vol at each expiry
-- [ ] **M3 Real-data study:** daily ^SPX snapshots; track how ρ, η, and ATM term structure move
-      with the market; compare SVI and SSVI fit quality on real spreads
+- [x] **M3 Real-data study:** CBOE snapshots, study script, SVI vs SSVI vs eSSVI on real
+      spreads (above). Ongoing: the time series of ρ, η and ATM term structure fills in as
+      daily snapshots accumulate
 - [x] **M4 eSSVI:** maturity-dependent ρ(θ) for better fits across the term structure
-- [ ] **M5 Link to the pricer:** local-vol Monte Carlo in
-      [sppricer](https://github.com/hossainyousuf751/sp-pricer); quantify how much skew lowers
-      the fair value of a worst-of autocallable compared with a flat-vol price
+- [x] **M5 Link to the pricer:** local-vol Monte Carlo feeding
+      [sppricer](https://github.com/hossainyousuf751/sp-pricer) products; skew lowers the
+      worst-of autocallable by 3–6 points versus flat vol
+- [ ] **M6 Put-wing fit:** a surface that fits the SPX put wing without arbitrage (e.g. eSSVI
+      with a per-slice φ, or SVI slices with an arbitrage-repair penalty), so the skew effect
+      above stops being a lower bound
 
 ## Limitations
 
 Yahoo Finance quotes are delayed and sometimes stale; the snapshot is not synchronised
 across strikes. Single-stock and ETF options are American, so implied vols from Black-76
 carry a small early-exercise bias even on OTM quotes. A single flat discount per expiry
-is used rather than a separate OIS curve.
+is used rather than a separate OIS curve. CBOE delayed quotes are end-of-day and for
+personal use; snapshots stay in the git-ignored `data/` folder.
+
+SSVI and eSSVI under-fit the SPX deep put wing (see M3). The autocallable study assumes a
+constant SPX/NDX correlation of 0.9 (no correlation skew), discounts at a flat rate from
+the SPX parity curve, and uses European protection only: sppricer's daily and continuous
+barrier corrections assume flat vol, so they are not applied to local-vol paths.
 
 ## References
 
