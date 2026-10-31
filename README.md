@@ -64,8 +64,21 @@ The fitted surface is free of static arbitrage by construction.
 decrease of w in θ is penalised during the fit and reported by the diagnostics. The fit starts
 from the SSVI solution, so its total weighted error is never worse than SSVI's.
 
+**Arbitrage-free SVI** (after Gatheral & Jacquier 2014, §5) for the steep SPX put wing that
+no single SSVI can reach. Each expiry gets its own 5-parameter SVI slice, started from the
+eSSVI slice (an SSVI slice is exactly an SVI slice). Slices are fitted from the longest
+expiry down, so each shorter slice only has to stay below the next longer one, and with
+residuals in implied-vol units so low-vega wing quotes count. Butterfly (g ≥ margin) and
+calendar (w ≤ next slice − margin) violations are penalised on k = z·√θ, z ∈ [−6, 4]
+standard deviations, the region prices and paths reach; any slice still infeasible on a
+fine grid is refitted with a 10× penalty. Between expiries w(k, ·) is a monotone cubic
+(PCHIP) at each k. For local vol, `fit.local_vol_surface()` keeps pillar expiries at least
+1.5× apart: interpolating exactly through weeklies a few days apart turns tiny noise in w
+into swings in ∂_T w.
+
 **Arbitrage diagnostics.** Butterfly arbitrage via Gatheral's density function g(k) ≥ 0 on
-each slice; calendar arbitrage via w(k, T) non-decreasing in T at fixed k.
+each slice; calendar arbitrage via w(k, T) non-decreasing in T at fixed k. The pipeline checks
+every model on the same z ∈ [−6, 4] standard-deviation domain.
 
 **Dupire local volatility** from total variance:
 
@@ -111,9 +124,10 @@ equalling implied vol on a flat surface.
 | ATM vol 1m / 1y | 14.9% / 17.1% | 24.2% / 23.1% |
 | SSVI ρ / η / γ | −0.55 / 1.24 / 0.50 | −0.46 / 1.26 / 0.46 |
 | eSSVI ρ₀ → ρ₁ | −0.68 → −0.53 | −0.53 → −0.44 |
-| Median RMSE, SVI / SSVI / eSSVI (vol pts) | 0.20 / 2.25 / 2.27 | 0.14 / 0.84 / 0.73 |
-| Static arbitrage, SVI slices | 797 calendar violations, butterfly | 2,076 calendar violations, butterfly |
-| Static arbitrage, SSVI and eSSVI | none | none |
+| Median RMSE, SVI / SSVI / eSSVI / arb-free SVI (vol pts) | 0.20 / 2.25 / 2.27 / 0.20 | 0.14 / 0.84 / 0.73 / 0.18 |
+| RMSE beyond −2 sd, eSSVI → arb-free SVI | 7.43 → 0.27 | 3.95 → 6.13 (3 quotes) |
+| Static arbitrage, free SVI slices | 485 calendar violations, butterfly | 1,213 calendar violations, butterfly |
+| Static arbitrage, SSVI, eSSVI, arb-free SVI | none | none |
 
 ![SPX smiles](docs/spx_smiles.png)
 
@@ -127,11 +141,15 @@ Findings:
   γ = ½): SPX's put skew is steeper than a single power-law SSVI can be while staying
   arbitrage-free. Free SVI slices follow the wing but pay for it with calendar and butterfly
   arbitrage.
+- **Arbitrage-free SVI closes the gap (M6):** 0.27 vol points beyond −2 sd on SPX, 0.15–0.42
+  in every other band, with no static arbitrage. The market quotes themselves have no
+  calendar crossings at any moneyness, so the earlier gap was the model, not the data.
+- NDX has only 3 quotes beyond −2 sd (half-spread ~1 vol point), so its wing number is noise.
 - Tracking ρ, η and the ATM term structure over time needs daily snapshots:
   run `examples/snapshot.py` each trading day; `examples/real_data_study.py` then writes
   `data/study.csv` and `docs/study_params.png`.
 
-## Skew and a worst-of autocallable (M5)
+## Skew and a worst-of autocallable (M5, M6)
 
 `volsurface.montecarlo.simulate_local_vol` simulates correlated paths under Dupire local vol
 (daily log-Euler, forwards matched by construction) in the layout
@@ -141,20 +159,27 @@ forward curves and random numbers, which agrees with sppricer's GBM engine (100.
 ± 0.04).
 
 `examples/autocallable_skew.py` prices sppricer's README note (3y quarterly worst-of Phoenix,
-8% p.a. memory coupon, autocall at 100% from year 1, European protection) on SPX and NDX with
-the eSSVI surfaces above, ρ(SPX, NDX) = 0.9, against flat ATM vol at maturity (18.2% / 23.6%):
+8% p.a. memory coupon, autocall at 100% from year 1, European protection) on SPX and NDX,
+ρ(SPX, NDX) = 0.9, against flat ATM vol at maturity (18.2% / 23.8%). All three legs share the
+forward curves and random numbers:
 
-| Protection / coupon barrier | Flat ATM vol | Local vol | Skew effect | P(worst < barrier at maturity) flat → LV |
-|---|---|---|---|---|
-| 60% / 70% | 100.51 | 95.88 | **−4.62 ± 0.06** | 8.6% → 15.3% |
-| 70% / 80% | 97.66 | 94.64 | **−3.02 ± 0.05** | 16.7% → 19.8% |
-| 50% / 60% | 102.87 | 97.23 | **−5.63 ± 0.07** | 3.4% → 11.4% |
+| Protection / coupon barrier | Flat ATM vol | eSSVI LV | Arb-free SVI LV | Skew effect | Wing fix vs eSSVI | P(worst < barrier) flat → LV |
+|---|---|---|---|---|---|---|
+| 60% / 70% | 100.41 | 96.14 | 96.42 | **−3.99 ± 0.06** | +0.27 ± 0.03 | 8.8% → 14.2% |
+| 70% / 80% | 97.56 | 94.78 | 95.05 | **−2.51 ± 0.05** | +0.27 ± 0.03 | 16.9% → 19.4% |
+| 50% / 60% | 102.79 | 97.64 | 97.84 | **−4.95 ± 0.07** | +0.20 ± 0.04 | 3.6% → 10.2% |
 
-Prices per 100 notional, 200,000 paths, 95% intervals on the paired difference. Flat vol
-misses most of the down-and-in put the investor sells: **skew takes 3–6 points off the fair
+Prices per 100 notional, 200,000 paths, 95% intervals on the paired differences. Flat vol
+misses most of the down-and-in put the investor sells: **skew takes 2.5–5 points off the fair
 value, and the deeper the barrier, the larger the error**, because flat ATM vol is furthest
-from the market exactly there. Since the eSSVI surface already under-states the SPX put wing,
-these are lower bounds on the skew effect.
+from the market exactly there. Fixing the SPX wing moves the price by only 0.2–0.3: the note
+is most sensitive around −1.5 to −2.5 sd at 1–3 years, where eSSVI's error was small, and
+eSSVI's over-shoots elsewhere slightly *overstated* the skew effect.
+
+The long end matters more than the wing. NDX's 2y and 3y quotes are wide (median spread
+about a third of the mid); dropping them (spread filter 0.3) ends NDX at 1.13y, and holding
+its smile fixed beyond that overstates the skew effect on the 60% note by about 0.8
+(−4.78 instead of −3.99). The example therefore keeps them (filter 0.5 for NDX).
 
 ## Roadmap
 
@@ -167,10 +192,9 @@ these are lower bounds on the skew effect.
 - [x] **M4 eSSVI:** maturity-dependent ρ(θ) for better fits across the term structure
 - [x] **M5 Link to the pricer:** local-vol Monte Carlo feeding
       [sppricer](https://github.com/hossainyousuf751/sp-pricer) products; skew lowers the
-      worst-of autocallable by 3–6 points versus flat vol
-- [ ] **M6 Put-wing fit:** a surface that fits the SPX put wing without arbitrage (e.g. eSSVI
-      with a per-slice φ, or SVI slices with an arbitrage-repair penalty), so the skew effect
-      above stops being a lower bound
+      worst-of autocallable by 2.5–5 points versus flat vol
+- [x] **M6 Put-wing fit:** arbitrage-free SVI slices; SPX wing error 7.4 → 0.3 vol points,
+      worst-of autocallable price moves by only +0.2–0.3
 
 ## Limitations
 
@@ -180,7 +204,11 @@ carry a small early-exercise bias even on OTM quotes. A single flat discount per
 is used rather than a separate OIS curve. CBOE delayed quotes are end-of-day and for
 personal use; snapshots stay in the git-ignored `data/` folder.
 
-SSVI and eSSVI under-fit the SPX deep put wing (see M3). The autocallable study assumes a
+Arbitrage-free SVI is free of static arbitrage on the checked domain (−6 to +4 standard
+deviations at each expiry, verified on a fine grid), not analytically everywhere; between
+pillar expiries butterfly freedom is not checked, and local vol falls back to implied vol at
+the rare NaN points (0.02% of the SPX simulation grid, none within ±3 sd). The autocallable
+study assumes a
 constant SPX/NDX correlation of 0.9 (no correlation skew), discounts at a flat rate from
 the SPX parity curve, and uses European protection only: sppricer's daily and continuous
 barrier corrections assume flat vol, so they are not applied to local-vol paths.

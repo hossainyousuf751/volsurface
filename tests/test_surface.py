@@ -59,6 +59,22 @@ def test_end_to_end_on_noisy_synthetic_chain():
     assert (errors["essvi_rmse_volpts"] < 0.5).all()
     for rho in (fit.essvi_params.rho0, fit.essvi_params.rho1):  # no spurious skew term structure
         assert rho == pytest.approx(truth["params"].rho, abs=0.05)
+    assert fit.svi_af_arbitrage.is_free
+    assert (errors["svi_af_rmse_volpts"] < 0.5).all()
+    pillars = fit.local_vol_surface()
+    assert np.all(pillars.expiries[1:-1] / pillars.expiries[:-2] >= 1.5)
+    assert check_surface(pillars, pillars.expiries, z_grid=np.linspace(-6, 4, 201)).is_free
+
+
+def test_svi_slice_surface_hits_slices_and_is_c1_in_T():
+    slices = [SVIParams(0.002 * i, 0.1, -0.5, 0.0, 0.2) for i in (1, 2, 4, 8)]
+    expiries = [0.25, 0.5, 1.0, 2.0]
+    surf = SVISliceSurface(CURVE, expiries, slices)
+    k = np.linspace(-0.5, 0.3, 9)
+    for T, s in zip(expiries, slices):
+        np.testing.assert_allclose(surf.total_variance(k, T), s.total_variance(k), rtol=1e-12)
+    K = CURVE.forward(1.0) * np.exp(k)
+    np.testing.assert_allclose(surf.local_vol(K, 1.0 - 1e-3), surf.local_vol(K, 1.0 + 1e-3), rtol=5e-3)
 
 
 def test_essvi_fits_varying_skew_chain_better_than_ssvi():

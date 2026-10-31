@@ -6,7 +6,7 @@ import numpy as np
 
 from volsurface.pipeline import SurfaceFit
 
-COLORS = {"quote": "#4C72B0", "svi": "#DD8452", "ssvi": "#55A868"}
+COLORS = {"quote": "#4C72B0", "svi_af": "#DD8452", "ssvi": "#55A868"}
 
 
 def plot_smiles(fit: SurfaceFit, path: str, max_panels: int = 8, title: str | None = None):
@@ -23,9 +23,10 @@ def plot_smiles(fit: SurfaceFit, path: str, max_panels: int = 8, title: str | No
         ax.errorbar(s["k"], s["iv_mid"] * 100, yerr=[lo, hi], fmt="o", ms=3, lw=0.8,
                     color=COLORS["quote"], label="bid/ask")
         k = np.linspace(s["k"].min(), s["k"].max(), 200)
-        for name, surf, ls in (("SVI", fit.svi_surface, "-"), ("SSVI", fit.ssvi_surface, "--")):
+        for key, name, surf, ls in (("svi_af", "SVI (arbitrage-free)", fit.svi_af_surface, "-"),
+                                    ("ssvi", "SSVI", fit.ssvi_surface, "--")):
             ax.plot(k, np.sqrt(surf.total_variance(k, T) / T) * 100, ls, lw=1.6,
-                    color=COLORS[name.lower()], label=name)
+                    color=COLORS[key], label=name)
         ax.set_title(f"T = {T:.2f}y", fontsize=11)
         ax.set_xlabel("log-moneyness k = ln(K/F)")
         ax.set_ylabel("implied vol (%)")

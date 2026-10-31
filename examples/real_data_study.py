@@ -28,7 +28,7 @@ for path in sorted(data_dir.glob("*_20[0-9][0-9][0-1][0-9][0-3][0-9].csv")):
            "atm_vol_1y": float(fit.ssvi_surface.implied_vol(fit.curve.forward(1.0), 1.0)),
            "ssvi_rho": s.rho, "ssvi_eta": s.eta, "ssvi_gamma": s.gamma,
            "essvi_rho0": e.rho0, "essvi_rho1": e.rho1}
-    for name in ("svi", "ssvi", "essvi"):
+    for name in ("svi", "ssvi", "essvi", "svi_af"):
         row[f"{name}_rmse"] = err[f"{name}_rmse_volpts"].median()
         row[f"{name}_in_spread"] = err[f"{name}_in_spread_pct"].mean()
         row[f"{name}_arb_free"] = getattr(fit, f"{name}_arbitrage").is_free

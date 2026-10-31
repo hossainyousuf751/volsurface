@@ -17,6 +17,7 @@ IV table (T, strike, k, w, iv_*, forward, discount, vega)
    │  θ(T) = SVI w(0), forced non-decreasing
    │  ssvi.fit_ssvi                 global (ρ, η, γ) across all quotes
    │  ssvi.fit_essvi                eSSVI (ρ₀, ρ₁, η, γ), started from the SSVI fit
+   │  svi.fit_svi_arbitrage_free    SVI slices from the eSSVI slices, long → short, no arbitrage
    ▼
 surface.ForwardCurve + SVISliceSurface + SSVISurface
    │  arbitrage.check_surface       butterfly (g ≥ 0) and calendar (∂T w ≥ 0)
@@ -40,7 +41,7 @@ list, never from those below:
 | Module | Responsibility | Imports from |
 |---|---|---|
 | `black` | Black-76 price, vega, and implied vol on (F, DF) | (none) |
-| `svi` | `SVIParams`, analytic derivatives, `fit_svi` | (none) |
+| `svi` | `SVIParams` (derivatives, `g`, `from_ssvi`), `fit_svi`, `fit_svi_arbitrage_free` | (none) |
 | `ssvi` | `SSVIParams`, `fit_ssvi`, `ESSVIParams`, `fit_essvi` | (none) |
 | `chain` | Cleaning, parity forwards, IV table | `black` |
 | `synthetic` | Option chains from a known SSVI truth | `black`, `ssvi` |
@@ -96,7 +97,9 @@ A change that breaks one of these is a bug, even if the tests still pass.
 4. **SSVI candidates are always admissible.** η = s·2/(1+|ρ|), s ∈ (0,1], γ ∈ (0, ½].
    Don't replace this reparameterisation with a penalty. eSSVI keeps the same guarantee per
    slice with max(|ρ₀|, |ρ₁|) in place of |ρ|, but its calendar arbitrage is only penalised,
-   so `fit.essvi_arbitrage` must be reported, as for SVI (invariant 5).
+   so `fit.essvi_arbitrage` must be reported, as for SVI (invariant 5). Arbitrage-free SVI
+   (`fit.svi_af_*`) is penalised *and* verified on a fine grid, with the penalty escalated
+   until feasible; its report is still the source of truth.
 5. **SVI slices are only penalised, not guaranteed.** Their arbitrage status must be
    *reported* (`fit.svi_arbitrage`), never assumed.
 6. **Local vol returns NaN, never a made-up number,** where ∂T w ≤ 0 or the Dupire
@@ -112,4 +115,4 @@ A change that breaks one of these is a bug, even if the tests still pass.
 | M3 real-data study | **Done:** `data.load_cboe_chain`, `examples/snapshot.py` (daily), `examples/real_data_study.py` |
 | M4 eSSVI ρ(θ) | **Done:** `ESSVIParams`/`fit_essvi` in `ssvi.py`; reuses `SSVISurface` |
 | M5 local-vol MC | **Done:** `montecarlo.simulate_local_vol` here; sppricer prices the paths unchanged |
-| M6 put-wing fit | A new params class plus fitter (per-slice φ eSSVI, or repaired SVI). Must keep invariants 3–6; the fit only needs `total_variance(k, theta)` for `SSVISurface` |
+| M6 put-wing fit | **Done:** `fit_svi_arbitrage_free`, PCHIP `SVISliceSurface`, `SurfaceFit.local_vol_surface()` (pillars) |

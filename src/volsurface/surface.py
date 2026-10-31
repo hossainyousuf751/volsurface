@@ -84,11 +84,12 @@ class FlatVolSurface(VolSurface):
 
 
 class SVISliceSurface(VolSurface):
-    """Per-expiry SVI smiles, linear in total variance between expiries at fixed k.
+    """Per-expiry SVI smiles, a monotone cubic (PCHIP) in T at fixed k between expiries.
 
-    Linear interpolation preserves the absence of calendar arbitrage when the
-    input slices are free of it. Before the first expiry and after the last,
-    implied vol is held constant in T at fixed k.
+    PCHIP keeps w(k, .) non-decreasing wherever the input slices are, so it adds
+    no calendar arbitrage, and makes w continuously differentiable in T, so the
+    local vol has no jumps at the expiries. Before the first expiry and after the
+    last, implied vol is held constant in T at fixed k.
     """
 
     def __init__(self, curve: ForwardCurve, expiries, slices: list[SVIParams]):
@@ -102,10 +103,10 @@ class SVISliceSurface(VolSurface):
         t = self.expiries
         stacked = np.stack([s.total_variance(k) for s in self.slices])  # (n_exp, *shape)
         idx = np.clip(np.searchsorted(t, T) - 1, 0, len(t) - 2)
-        t0, t1 = t[idx], t[idx + 1]
-        w0 = np.take_along_axis(stacked, idx[None, ...], 0)[0]
-        w1 = np.take_along_axis(stacked, (idx + 1)[None, ...], 0)[0]
-        inner = w0 + (T - t0) / (t1 - t0) * (w1 - w0)
+        coef = PchipInterpolator(t, stacked, axis=0).c  # (4, n_exp - 1, *shape), powers of (T - t[idx])
+        c = np.take_along_axis(coef, idx[None, None, ...], 1)[:, 0]
+        x = T - t[idx]
+        inner = ((c[0] * x + c[1]) * x + c[2]) * x + c[3]
         before = stacked[0] * T / t[0]
         after = stacked[-1] * T / t[-1]
         return np.where(T < t[0], before, np.where(T > t[-1], after, inner))
