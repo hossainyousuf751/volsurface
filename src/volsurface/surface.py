@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import numpy as np
+from scipy.interpolate import PchipInterpolator
 
 from volsurface.ssvi import SSVIParams
 from volsurface.svi import SVIParams
@@ -111,16 +112,28 @@ class SVISliceSurface(VolSurface):
 
 
 class SSVISurface(VolSurface):
-    """SSVI surface with ATM total variance theta(T) linear between expiries."""
+    """SSVI surface with ATM total variance theta(T) a monotone cubic (PCHIP) in T.
+
+    PCHIP keeps theta non-decreasing, so the surface stays free of calendar
+    arbitrage, and makes it continuously differentiable, so dw/dT and the
+    Dupire local vol have no jumps at the expiries. Beyond the last expiry
+    theta continues along its end tangent.
+    """
 
     def __init__(self, curve: ForwardCurve, params: SSVIParams, expiries, thetas):
         super().__init__(curve)
         self.params = params
-        self._t = np.concatenate([[0.0], np.asarray(expiries, dtype=float)])
-        self._theta = np.concatenate([[0.0], np.maximum.accumulate(np.asarray(thetas, dtype=float))])
+        t = np.concatenate([[0.0], np.asarray(expiries, dtype=float)])
+        theta = np.concatenate([[0.0], np.maximum.accumulate(np.asarray(thetas, dtype=float))])
+        self._pchip = PchipInterpolator(t, theta, extrapolate=False)
+        self._t_end, self._theta_end = t[-1], theta[-1]
+        self._slope_end = float(self._pchip.derivative()(t[-1]))
 
     def theta(self, T):
-        return np.maximum(_interp_extrap(T, self._t, self._theta), 1e-12)
+        T = np.asarray(T, dtype=float)
+        inside = self._pchip(np.clip(T, 0.0, self._t_end))
+        after = self._theta_end + self._slope_end * (T - self._t_end)
+        return np.maximum(np.where(T > self._t_end, after, inside), 1e-12)
 
     def total_variance(self, k, T):
         k, T = np.broadcast_arrays(np.asarray(k, dtype=float), np.asarray(T, dtype=float))

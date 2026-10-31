@@ -50,8 +50,10 @@ negative variance and violations of Roger Lee's wing bound b(1 + |ρ|) ≤ 2.
 
 **SSVI surface** (Gatheral & Jacquier 2014) with power-law curvature
 φ(θ) = η / (θ^γ (1 + θ)^(1−γ)). The ATM total-variance term structure θ(T) is taken from the
-SVI slices and forced to be non-decreasing. η is reparameterised as η = s·2/(1 + |ρ|),
-s ∈ (0, 1], so every candidate satisfies the no-arbitrage bound η(1 + |ρ|) ≤ 2, γ ≤ ½.
+SVI slices, forced to be non-decreasing, and interpolated in T with a monotone cubic (PCHIP),
+so it is continuously differentiable and the local vol has no jumps at the expiries.
+η is reparameterised as η = s·2/(1 + |ρ|), s ∈ (0, 1], so every candidate satisfies the
+no-arbitrage bound η(1 + |ρ|) ≤ 2, γ ≤ ½.
 The fitted surface is free of static arbitrage by construction.
 
 **Arbitrage diagnostics.** Butterfly arbitrage via Gatheral's density function g(k) ≥ 0 on
@@ -86,7 +88,7 @@ equalling implied vol on a flat surface.
 ## Roadmap
 
 - [x] **M1 Pipeline:** cleaning, parity forwards, implied vols, SVI, SSVI, arbitrage checks, Dupire local vol
-- [ ] **M2 Smooth term structure:** replace piecewise-linear θ(T) with a monotone spline, removing
+- [x] **M2 Smooth term structure:** replace piecewise-linear θ(T) with a monotone spline, removing
       the horizontal bands in the local vol at each expiry
 - [ ] **M3 Real-data study:** daily ^SPX snapshots; track how ρ, η, and ATM term structure move
       with the market; compare SVI and SSVI fit quality on real spreads
