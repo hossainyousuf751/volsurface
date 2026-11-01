@@ -52,8 +52,8 @@ list, never from those below:
 | `plotting` | Diagnostic figures (lazy `matplotlib`) | `pipeline` |
 | `data` | CBOE delayed-quote loader (stdlib only), Yahoo loader (lazy `yfinance`) | (none) |
 
-`sppricer` is never imported by the package, only by `examples/autocallable_skew.py`
-(`pip install -e ".[pricer]"`). The contract between the two is the paths array.
+No other library is imported, not even in examples. Pricing on these paths happens in
+quant-stack (study S1), where the contract is structural: a surface exposes `local_vol(K, T)` and `curve`.
 
 Keep model modules (`svi`, `ssvi`) free of pandas and of each other. They work on arrays only.
 

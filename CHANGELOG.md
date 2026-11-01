@@ -23,6 +23,10 @@ First tagged release. It also contains milestones M2–M6, merged after 0.1.0 wi
 - `examples/real_data_study.py` prints RMSE by standard-deviation band, raw quote counts and calendar-violation
   counts, so every number in the README's real-data section now comes from a script.
 
+### Removed
+- `examples/autocallable_skew.py` and the `pricer` extra. The study moved to quant-stack (S1), which
+  reproduces its table, so volsurface no longer depends on sppricer anywhere.
+
 ### Fixed
 - README: arbitrage-free SVI band RMSE is "0.16–0.42", not "0.15–0.42". The script prints 0.16.
 

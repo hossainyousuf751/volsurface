@@ -19,8 +19,6 @@ pytest
 python examples/synthetic_demo.py        # offline, against a known true surface
 python examples/snapshot.py              # save today's CBOE ^SPX / ^NDX close to data/ (any time)
 python examples/real_data_study.py       # fit every saved snapshot (M3)
-pip install -e ".[pricer]"
-python examples/autocallable_skew.py     # skew vs flat vol on a worst-of autocallable (M5)
 ```
 
 ```python
@@ -152,37 +150,28 @@ Findings:
   run `examples/snapshot.py` each trading day; `examples/real_data_study.py` then writes
   `data/study.csv` and `docs/study_params.png`.
 
-## Skew and a worst-of autocallable (M5, M6)
+## Local-vol Monte Carlo (M5, M6)
 
 `volsurface.montecarlo.simulate_local_vol` simulates correlated paths under Dupire local vol
-(daily log-Euler, forwards matched by construction) in the layout
-[sppricer](https://github.com/hossainyousuf751/sp-pricer) products take. It reprices the
-surface's own vanillas within 4 standard errors, and with `flat_vols` it is GBM on the same
-forward curves and random numbers, which agrees with sppricer's GBM engine (100.49 vs 100.51,
-± 0.04).
+(daily log-Euler, forwards matched by construction) in the `(n_paths, n_times, n_assets)` layout
+that pricing libraries take. It reprices the surface's own vanillas within 4 standard errors, and
+with `flat_vols` it is GBM on the same forward curves and random numbers.
 
-`examples/autocallable_skew.py` prices sppricer's README note (3y quarterly worst-of Phoenix,
-8% p.a. memory coupon, autocall at 100% from year 1, European protection) on SPX and NDX,
-ρ(SPX, NDX) = 0.9, against flat ATM vol at maturity (18.2% / 23.8%). All three legs share the
-forward curves and random numbers:
+The worst-of autocallable study that used it has moved to
+[quant-stack](https://github.com/hossainyousuf751/quant-stack) as study S1, so volsurface no
+longer depends on sppricer, not even in an example. S1 prices sppricer's README note on SPX and NDX
+(ρ = 0.9) with sppricer's own `LocalVolModel`, an independent implementation, and reproduces this
+repo's earlier table on the 2026-10-30 close within Monte Carlo error:
 
-| Protection / coupon barrier | Flat ATM vol | eSSVI LV | Arb-free SVI LV | Skew effect | Wing fix vs eSSVI | P(worst < barrier) flat → LV |
-|---|---|---|---|---|---|---|
-| 60% / 70% | 100.41 | 96.14 | 96.42 | **−3.99 ± 0.06** | +0.27 ± 0.03 | 8.8% → 14.2% |
-| 70% / 80% | 97.56 | 94.78 | 95.05 | **−2.51 ± 0.05** | +0.27 ± 0.03 | 16.9% → 19.4% |
-| 50% / 60% | 102.79 | 97.64 | 97.84 | **−4.95 ± 0.07** | +0.20 ± 0.04 | 3.6% → 10.2% |
+| 60% / 70% barrier, per 100 | Flat ATM vol | eSSVI LV | Arb-free SVI LV |
+|---|---|---|---|
+| quant-stack S1 (sppricer `LocalVolModel`, 100,000 paths) | 100.44 | 96.15 | 96.44 |
+| earlier `examples/autocallable_skew.py` (`simulate_local_vol`, 200,000 paths) | 100.41 | 96.14 | 96.42 |
 
-Prices per 100 notional, 200,000 paths, 95% intervals on the paired differences. Flat vol
-misses most of the down-and-in put the investor sells: **skew takes 2.5–5 points off the fair
-value, and the deeper the barrier, the larger the error**, because flat ATM vol is furthest
-from the market exactly there. Fixing the SPX wing moves the price by only 0.2–0.3: the note
-is most sensitive around −1.5 to −2.5 sd at 1–3 years, where eSSVI's error was small, and
-eSSVI's over-shoots elsewhere slightly *overstated* the skew effect.
-
-The long end matters more than the wing. NDX's 2y and 3y quotes are wide (median spread
-about a third of the mid); dropping them (spread filter 0.3) ends NDX at 1.13y, and holding
-its smile fixed beyond that overstates the skew effect on the 60% note by about 0.8
-(−4.78 instead of −3.99). The example therefore keeps them (filter 0.5 for NDX).
+Skew takes about 4 points off the fair value, and fixing the SPX put wing (M6) moves it back by
+only about 0.3. NDX's long-dated quotes are wide; S1 keeps them (spread filter 0.5), because
+dropping them ends NDX at 1.13 years and holding its smile fixed beyond that overstates the skew
+effect.
 
 ## Using a fitted surface elsewhere (v0.2)
 
@@ -227,11 +216,10 @@ sppricer's local-vol Monte Carlo (structural typing, no import between the libra
       spreads (above). Ongoing: the time series of ρ, η and ATM term structure fills in as
       daily snapshots accumulate
 - [x] **M4 eSSVI:** maturity-dependent ρ(θ) for better fits across the term structure
-- [x] **M5 Link to the pricer:** local-vol Monte Carlo feeding
-      [sppricer](https://github.com/hossainyousuf751/sp-pricer) products; skew lowers the
-      worst-of autocallable by 2.5–5 points versus flat vol
+- [x] **M5 Link to the pricer:** local-vol Monte Carlo in the paths layout pricers take; the
+      autocallable study now lives in quant-stack (S1): skew lowers the worst-of note by about 4 points
 - [x] **M6 Put-wing fit:** arbitrage-free SVI slices; SPX wing error 7.4 → 0.3 vol points,
-      worst-of autocallable price moves by only +0.2–0.3
+      worst-of autocallable price moves by only about +0.3 (quant-stack S1)
 
 ## Limitations
 
@@ -244,11 +232,7 @@ personal use; snapshots stay in the git-ignored `data/` folder.
 Arbitrage-free SVI is free of static arbitrage on the checked domain (−6 to +4 standard
 deviations at each expiry, verified on a fine grid), not analytically everywhere; between
 pillar expiries butterfly freedom is not checked, and local vol falls back to implied vol at
-the rare NaN points (0.02% of the SPX simulation grid, none within ±3 sd). The autocallable
-study assumes a
-constant SPX/NDX correlation of 0.9 (no correlation skew), discounts at a flat rate from
-the SPX parity curve, and uses European protection only: sppricer's daily and continuous
-barrier corrections assume flat vol, so they are not applied to local-vol paths.
+the rare NaN points (`local_vol(..., floor=, cap=)` counts them).
 
 ## References
 
