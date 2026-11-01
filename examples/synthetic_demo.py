@@ -40,7 +40,7 @@ for name in ("ssvi", "essvi"):
     print(f"  {name:5s} mean RMSE {err[f'{name}_rmse_volpts'].mean():.3f} vol pts, "
           f"{err[f'{name}_in_spread_pct'].mean():.0f}% inside bid-ask")
 
-plot_smiles(fit, out / "smiles.png", title="SVI and SSVI fits to a noisy synthetic chain")
+plot_smiles(fit, out / "smiles.png", title="Arbitrage-free SVI and SSVI fits to a noisy synthetic chain")
 plot_vol_heatmap(fit, out / "implied_vol.png", kind="implied")
 plot_vol_heatmap(fit, out / "local_vol.png", kind="local",
                  title="Dupire local volatility from the SSVI surface")

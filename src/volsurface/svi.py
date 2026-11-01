@@ -32,6 +32,17 @@ class SVIParams:
         k = np.asarray(k, dtype=float)
         return self.b * self.sigma**2 / ((k - self.m) ** 2 + self.sigma**2) ** 1.5
 
+    def g(self, k):
+        """Gatheral's density function g(k); g < 0 means butterfly arbitrage."""
+        k = np.asarray(k, dtype=float)
+        w, w1, w2 = self.total_variance(k), self.dw(k), self.d2w(k)
+        return (1 - k * w1 / (2 * w)) ** 2 - w1**2 / 4 * (1 / w + 0.25) + w2 / 2
+
+    @classmethod
+    def from_ssvi(cls, theta: float, rho: float, phi: float) -> SVIParams:
+        """The raw SVI slice equal to an SSVI slice (Gatheral & Jacquier 2014, Lemma 3.2)."""
+        return cls(0.5 * theta * (1 - rho**2), 0.5 * theta * phi, rho, -rho / phi, np.sqrt(1 - rho**2) / phi)
+
     @property
     def is_valid(self) -> bool:
         """Parameter constraints: positive total variance and Roger Lee's wing bound."""
@@ -82,3 +93,48 @@ def fit_svi(k, w, weights=None) -> SVIParams:
         if best is None or sol.cost < best.cost:
             best = sol
     return SVIParams(*map(float, best.x))
+
+
+Z_DOMAIN = np.linspace(-6.0, 4.0, 201)  # standard deviations k / sqrt(theta) where arbitrage is excluded
+
+
+def fit_svi_arbitrage_free(slices: dict, starts: dict, thetas: dict, z=Z_DOMAIN,
+                           penalty: float = 1e2, max_escalations: int = 3) -> dict[float, SVIParams]:
+    """SVI slices free of static arbitrage on k = z * sqrt(theta), after Gatheral & Jacquier (2014), §5.
+
+    slices maps T -> (k, w, weights); residuals are weights * (w_model - w), so
+    weights = 1 / (2 * iv * T) makes them implied-vol errors. starts maps T to an
+    arbitrage-free first guess (the SSVI slices). Slices are fitted from the longest
+    expiry down, so each shorter slice only has to stay below the next longer one,
+    which constrains its wings where it has no quotes. Butterfly (g >= margin) and
+    calendar (w <= w_next - margin) violations are penalised; a slice still
+    infeasible on a fine grid is refitted with a 10x penalty, up to max_escalations times.
+    """
+    fitted, nxt = {}, None
+    for T in sorted(slices, reverse=True):
+        k, w, sw = (np.asarray(x, dtype=float) for x in slices[T])
+        root = 1.1 * np.sqrt(thetas[T])  # 10% padding: checks scale z by the fitted ATM variance, not theta
+        kg, kf = root * z, root * np.linspace(z[0], z[-1], 10 * len(z))
+        w_next, w_next_f = (None, None) if nxt is None else (nxt.total_variance(kg), nxt.total_variance(kf))
+
+        def residuals(x, pen):
+            p = SVIParams(*x)
+            wg = p.total_variance(kg)
+            lee = max(0.0, p.b * (1 + abs(p.rho)) - 2)
+            parts = [np.maximum(0, 1e-3 - p.g(kg)), np.maximum(0, -wg), [lee]]
+            if w_next is not None:
+                parts.append(np.maximum(0, wg - w_next + 1e-3 * thetas[T]))
+            return np.concatenate([sw * (p.total_variance(k) - w), pen * np.concatenate(parts)])
+
+        def feasible(p):
+            return p.g(kf).min() >= 0 and (w_next_f is None or (p.total_variance(kf) <= w_next_f).all())
+
+        lb, ub = np.array([-1.0, 1e-8, -0.999, -5.0, 1e-4]), np.array([1.0, 5.0, 0.999, 5.0, 5.0])
+        s = starts[T]
+        x = np.clip([s.a, s.b, s.rho, s.m, s.sigma], lb + 1e-9, ub - 1e-9)
+        for i in range(max_escalations + 1):
+            x = least_squares(residuals, x, bounds=(lb, ub), x_scale="jac", args=(penalty * 10**i,)).x
+            if feasible(SVIParams(*x)):
+                break
+        fitted[T] = nxt = SVIParams(*map(float, x))
+    return dict(sorted(fitted.items()))

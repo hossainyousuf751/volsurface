@@ -87,6 +87,10 @@ class ESSVIParams:
         u = np.sqrt(np.clip(np.asarray(theta, dtype=float) / self.theta_ref, 0.0, 1.0))
         return self.rho0 + (self.rho1 - self.rho0) * u
 
+    def phi(self, theta):
+        theta = np.asarray(theta, dtype=float)
+        return self.eta / (theta**self.gamma * (1 + theta) ** (1 - self.gamma))
+
     def total_variance(self, k, theta):
         return ssvi_total_variance(k, theta, self.rho(theta), self.eta, self.gamma)
 
