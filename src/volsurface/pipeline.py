@@ -48,7 +48,9 @@ class SurfaceFit:
         for T in self.expiries[1:]:
             if T >= min_ratio * keep[-1] or T == self.expiries[-1]:
                 keep.append(T)
-        return SVISliceSurface(self.curve, keep, [self.svi_af_slices[T] for T in keep])
+        surface = SVISliceSurface(self.curve, keep, [self.svi_af_slices[T] for T in keep])
+        surface.k_range = self.svi_af_surface.k_range
+        return surface
 
 
 def fit_surface(quotes: pd.DataFrame, spot: float, min_quotes_per_expiry: int = 8,

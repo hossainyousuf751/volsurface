@@ -158,3 +158,11 @@ def test_shifted_surface_moves_implied_vol_and_rejects_arbitrage():
         FlatVolSurface(CURVE, 0.2).shifted(parallel=0.01)
     flat = FlatVolSurface(CURVE, 0.2).shifted(0.01, expiries=[0.5, 1.0])
     np.testing.assert_allclose(flat.implied_vol(K, T), 0.21, rtol=1e-12)
+
+
+def test_local_vol_surface_keeps_the_fitted_moneyness_range():
+    quotes, truth = synthetic_chain(seed=0)
+    fit = fit_surface(quotes, truth["spot"])
+    surf = fit.local_vol_surface()
+    assert surf.k_range == fit.svi_af_surface.k_range is not None
+    assert np.isfinite(surf.local_vol(np.array([1.0, 1000.0]), 1.0, extrapolate="flat")).all()

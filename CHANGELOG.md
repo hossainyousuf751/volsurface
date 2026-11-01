@@ -15,7 +15,8 @@ First tagged release. It also contains milestones M2–M6, merged after 0.1.0 wi
   - NaN falls back to implied vol, and the result is clipped to [floor, cap].
   - Changed evaluations are counted in `n_clamped` / `n_local_vol`.
   - Without the new keywords, the output is unchanged.
-- `VolSurface.k_range`, which `fit_surface` sets from the quotes' log-moneyness range.
+- `VolSurface.k_range`, which `fit_surface` sets from the quotes' log-moneyness range, and which
+  `SurfaceFit.local_vol_surface()` carries over.
 - `ForwardCurve.to_dict` / `from_dict` and `SSVISurface.to_dict` / `from_dict` (SSVI and eSSVI): JSON-safe
   and exact.
 - `VolSurface.shifted(parallel, skew)` and `ShiftedSurface`: scenario surfaces that raise `ValueError` on
