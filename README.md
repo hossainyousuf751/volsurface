@@ -129,6 +129,9 @@ equalling implied vol on a flat surface.
 | Static arbitrage, free SVI slices | 485 calendar violations, butterfly | 1,213 calendar violations, butterfly |
 | Static arbitrage, SSVI, eSSVI, arb-free SVI | none | none |
 
+Standard-deviation bands use z = k/√w, each quote's distance from the money in its own
+standard deviations; `examples/real_data_study.py` prints the RMSE per band for every model.
+
 ![SPX smiles](docs/spx_smiles.png)
 
 Findings:
@@ -141,7 +144,7 @@ Findings:
   γ = ½): SPX's put skew is steeper than a single power-law SSVI can be while staying
   arbitrage-free. Free SVI slices follow the wing but pay for it with calendar and butterfly
   arbitrage.
-- **Arbitrage-free SVI closes the gap (M6):** 0.27 vol points beyond −2 sd on SPX, 0.15–0.42
+- **Arbitrage-free SVI closes the gap (M6):** 0.27 vol points beyond −2 sd on SPX, 0.16–0.42
   in every other band, with no static arbitrage. The market quotes themselves have no
   calendar crossings at any moneyness, so the earlier gap was the model, not the data.
 - NDX has only 3 quotes beyond −2 sd (half-spread ~1 vol point), so its wing number is noise.
@@ -180,6 +183,40 @@ The long end matters more than the wing. NDX's 2y and 3y quotes are wide (median
 about a third of the mid); dropping them (spread filter 0.3) ends NDX at 1.13y, and holding
 its smile fixed beyond that overstates the skew effect on the 60% note by about 0.8
 (−4.78 instead of −3.99). The example therefore keeps them (filter 0.5 for NDX).
+
+## Using a fitted surface elsewhere (v0.2)
+
+Three additions let a fitted surface drive a pricer or a risk engine without refitting:
+
+```python
+lv = fit.ssvi_surface.local_vol(K, T, floor=0.05, cap=2.0, extrapolate="flat")
+fit.ssvi_surface.n_clamped, fit.ssvi_surface.n_local_vol   # how often the guard rails acted
+
+d = fit.ssvi_surface.to_dict()                  # JSON-safe: save a snapshot's surface
+surface = SSVISurface.from_dict(d)              # identical surface, no refit
+
+stressed = fit.ssvi_surface.shifted(parallel=0.05, skew=-0.02)   # +5 vol pts, steeper puts
+```
+
+- **Safe local vol.** Dupire is unreliable where there are no quotes: in the far wings the
+  finite-difference denominator can approach zero. `extrapolate="flat"` holds local vol flat in
+  k beyond the fitted range (`surface.k_range`, set by `fit_surface`); NaN (an arbitrage
+  point) falls back to implied vol; `floor`/`cap` clip the rest. Every evaluation the guard
+  rails changed is counted, so a simulation can report how much of it ran on them. Without
+  these keywords `local_vol` is unchanged and still returns NaN at arbitrage.
+- **Serialisation.** `ForwardCurve` and `SSVISurface` (SSVI or eSSVI) round-trip exactly
+  through `to_dict` / `from_dict`.
+- **Scenario surfaces.** `surface.shifted(parallel, skew)` adds `parallel + skew·k` to implied
+  vol, for stress tests. The result is checked for static arbitrage at the surface's expiries
+  on k ∈ [−1, 1], and the method raises `ValueError` instead of returning a surface with
+  arbitrage.
+
+## Part of quant-stack
+
+volsurface is one of five independent libraries linked in
+[quant-stack](https://github.com/hossainyousuf751/quant-stack), where a fitted surface drives
+sppricer's local-vol Monte Carlo (structural typing, no import between the libraries) and
+`shifted` surfaces feed risk-lab stress tests. volsurface installs and tests on its own.
 
 ## Roadmap
 

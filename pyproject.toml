@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "volsurface"
-version = "0.1.0"
+version = "0.2.0"
 description = "Implied volatility surface construction: SVI/SSVI fitting, arbitrage checks, Dupire local vol"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,6 +21,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: needs local data or minutes of runtime; run with -m slow"]
+addopts = "-m 'not slow'"
 
 [tool.ruff]
 line-length = 110

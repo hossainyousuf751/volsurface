@@ -15,7 +15,7 @@ from volsurface.plotting import plot_smiles
 
 root = Path(__file__).resolve().parent.parent
 data_dir, docs_dir = root / "data", root / "docs"
-rows, latest = [], {}
+rows, latest, n_raw = [], {}, {}
 for path in sorted(data_dir.glob("*_20[0-9][0-9][0-1][0-9][0-3][0-9].csv")):
     ticker, day = path.stem.split("_")
     quotes = pd.read_csv(path)
@@ -33,12 +33,32 @@ for path in sorted(data_dir.glob("*_20[0-9][0-9][0-1][0-9][0-3][0-9].csv")):
         row[f"{name}_in_spread"] = err[f"{name}_in_spread_pct"].mean()
         row[f"{name}_arb_free"] = getattr(fit, f"{name}_arbitrage").is_free
     rows.append(row)
-    latest[ticker] = fit
+    latest[ticker], n_raw[ticker] = fit, len(quotes)
 
 study = pd.DataFrame(rows).sort_values(["ticker", "date"])
 study.to_csv(data_dir / "study.csv", index=False)
 with pd.option_context("display.float_format", "{:.3f}".format, "display.width", 200):
     print(study.to_string(index=False))
+
+# RMSE by moneyness band, latest snapshot per ticker. z = k / sqrt(w) is each quote's distance
+# from the money in its own standard deviations, so bands mean the same thing at every expiry.
+for ticker, fit in sorted(latest.items()):
+    t = fit.table
+    z = t["k"] / np.sqrt(t["w"])
+    band = pd.cut(z, [-np.inf, -2, -1, 1, np.inf], labels=["< -2 sd", "-2..-1 sd", "+-1 sd", "> 1 sd"])
+    T = t["T"].to_numpy()
+    out = {"quotes": t.groupby(band, observed=True).size()}
+    for name in ("ssvi", "essvi", "svi_af"):
+        model = np.sqrt(getattr(fit, f"{name}_surface").total_variance(t["k"].to_numpy(), T) / T)
+        sq_err = (100 * (model - t["iv_mid"])) ** 2
+        out[f"{name}_rmse"] = sq_err.groupby(band, observed=True).mean() ** 0.5
+    s = fit.ssvi_params
+    print(f"\n{ticker}: {n_raw[ticker]:,} raw quotes; free SVI slices: "
+          f"{len(fit.svi_arbitrage.calendar_violations)} calendar violations, "
+          f"butterfly-free {fit.svi_arbitrage.butterfly_free}; "
+          f"SSVI eta(1+|rho|) = {s.eta * (1 + abs(s.rho)):.3f}")
+    with pd.option_context("display.float_format", "{:.2f}".format):
+        print(pd.DataFrame(out).to_string())
 
 if "SPX" in latest:
     fit = latest["SPX"]

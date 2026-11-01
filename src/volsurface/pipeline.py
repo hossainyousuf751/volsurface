@@ -86,6 +86,9 @@ def fit_surface(quotes: pd.DataFrame, spot: float, min_quotes_per_expiry: int = 
     ssvi_surface = SSVISurface(curve, ssvi, expiries, [thetas[T] for T in expiries])
     essvi_surface = SSVISurface(curve, essvi, expiries, [thetas[T] for T in expiries])
     svi_af_surface = SVISliceSurface(curve, expiries, [af_slices[T] for T in expiries])
+    k_range = (float(table["k"].min()), float(table["k"].max()))
+    for surf in (svi_surface, ssvi_surface, essvi_surface, svi_af_surface):
+        surf.k_range = k_range
 
     return SurfaceFit(
         table=table, curve=curve, svi_slices=slices, thetas=thetas, ssvi_params=ssvi,
