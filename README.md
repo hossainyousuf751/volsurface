@@ -9,12 +9,13 @@ extract Dupire local volatility for pricing path-dependent products.
 put-call parity → OTM implied vols → per-expiry SVI smiles → global SSVI and eSSVI surfaces →
 static-arbitrage checks → Dupire local vol.
 
-![Fitted smiles](docs/smiles.png)
+![Fitted smiles](https://raw.githubusercontent.com/hossainyousuf751/volsurface/main/docs/smiles.png)
 
 ## Quickstart
 
 ```bash
-pip install -e ".[dev]"
+pip install volsurface-lab                 # from PyPI; the import is still `import volsurface`
+pip install -e ".[dev]"                    # or, from a clone, for development
 pytest
 python examples/synthetic_demo.py        # offline, against a known true surface
 python examples/snapshot.py              # save today's CBOE ^SPX / ^NDX close to data/ (any time)
@@ -112,7 +113,7 @@ factors, SVI and SSVI parameter recovery, detection of Axel Vogt's known butterf
 SVI counterexample, detection of crossed slices (calendar arbitrage), and local vol
 equalling implied vol on a flat surface.
 
-![Local volatility](docs/local_vol.png)
+![Local volatility](https://raw.githubusercontent.com/hossainyousuf751/volsurface/main/docs/local_vol.png)
 
 ## Real data (M3): SPX and NDX, CBOE close of 2026-10-30
 
@@ -130,7 +131,7 @@ equalling implied vol on a flat surface.
 Standard-deviation bands use z = k/√w, each quote's distance from the money in its own
 standard deviations; `examples/real_data_study.py` prints the RMSE per band for every model.
 
-![SPX smiles](docs/spx_smiles.png)
+![SPX smiles](https://raw.githubusercontent.com/hossainyousuf751/volsurface/main/docs/spx_smiles.png)
 
 Findings:
 
@@ -244,4 +245,4 @@ the rare NaN points (`local_vol(..., floor=, cap=)` counts them).
 
 ## License
 
-[MIT](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.
+[MIT](https://github.com/hossainyousuf751/volsurface/blob/main/LICENSE). See [CONTRIBUTING.md](https://github.com/hossainyousuf751/volsurface/blob/main/CONTRIBUTING.md) to contribute.

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 (2026-11-11)
+
+First release on PyPI, as `volsurface-lab` (`pip install volsurface-lab`): the name `volsurface` is
+taken on PyPI by an unrelated project. The import name is unchanged (`import volsurface`). No code
+changes; every result is identical to 0.2.0.
+- Licence metadata (MIT, `LICENSE` already in the repo) and the repository URL.
+- `publish` workflow: a version bump merged to main tags, releases and uploads to PyPI.
+- README links and images are absolute, so they work on PyPI.
+
 ## 0.2.0 (2026-11-01)
 
 First tagged release. It also contains milestones M2–M6, merged after 0.1.0 without a release:
