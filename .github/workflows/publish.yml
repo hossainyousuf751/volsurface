@@ -1,0 +1,94 @@
+name: publish
+
+# Releases are automatic: when a version bump in pyproject.toml lands on main and that version
+# has no tag yet, this builds the package, creates the vX.Y.Z tag and GitHub release (notes =
+# the "## X.Y.Z" section of CHANGELOG.md) and uploads to PyPI via trusted publishing (no API
+# token stored here). Publishing a release by hand also uploads it. Keep this file's name:
+# the PyPI trusted publisher is registered for publish.yml (see CONTRIBUTING.md).
+on:
+  push:
+    branches: [main]
+    paths: [pyproject.toml]
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.plan.outputs.publish }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Decide whether to publish
+        id: plan
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = release ]; then
+            test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != v$version"; exit 1; }
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "v$version is already released; nothing to do"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Extract release notes from CHANGELOG.md
+        if: steps.plan.outputs.publish == 'true'
+        run: |
+          python - "${{ steps.plan.outputs.version }}" <<'EOF'
+          import re, sys
+          v = sys.argv[1]
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"^## {re.escape(v)}\b.*?\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+          if not m or not m.group(1).strip():
+              sys.exit(f"CHANGELOG.md has no non-empty '## {v}' section")
+          open("notes.md", "w", encoding="utf-8").write(m.group(1).strip() + "\n")
+          EOF
+      - if: steps.plan.outputs.publish == 'true'
+        run: pip install build twine && python -m build && twine check dist/*
+      - if: steps.plan.outputs.publish == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: |
+            dist/
+            notes.md
+
+  github-release:
+    needs: build
+    if: github.event_name == 'push' && needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+      - name: Create tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.build.outputs.version }}
+        run: |
+          gh release create "v$V" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "volsurface-lab $V" --notes-file notes.md --latest
+
+  pypi:
+    needs: [build, github-release]
+    # runs after the release job, or without it when a release was published by hand
+    if: >-
+      !cancelled() && needs.build.outputs.publish == 'true'
+      && contains(fromJSON('["success", "skipped"]'), needs.github-release.result)
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
